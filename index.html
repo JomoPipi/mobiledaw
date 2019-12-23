@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sequencer</title>
+    <link href='main.css' rel='stylesheet' type='text/css'>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="144x144"  href="/favicon-144x144.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#00878f">
+    <meta content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' name='viewport'>
+    <script src="https://files-bfyeorwdgp.now.sh"></script>
+</head>
+
+<body>
+
+    <div id="interface">
+        <button id="play" onclick="System.on ^= 1">play</button>
+        <button class="function-btn" onclick="gotoPage(masterPage)">Master</button>
+        <button class="function-btn" onclick="gotoPage()"> Arrange</button>
+        <div id="track-container"></div>
+    </div> 
+
+    <div id="master-page">
+
+        <span id="tempo-txt">BPM: 64</span>
+        <input id="tempo"class="slider"type="range" min="6" max="8.5" step="0.001" 
+        oninput="D('tempo-txt').innerHTML='BPM: '+((2**this.value)**2/256|0);"
+        value="7" onpointerup="" ontouchend=""> 
+        <br>
+
+        <div id="vol-text">volume: 50%</div>
+        <input id="master-volume"class="slider"type="range" min="0" max="100" step="1" 
+        oninput="
+        D('vol-text').innerHTML='volume: '+this.value
+        System.masterVolume.gain.value=this.value/100"
+        value="50" onpointerup="" ontouchend=""> 
+        <button class="function-btn" id="active-step-btn"
+        onclick="this.classList.toggle('enabled')">Active Step</button>
+        <br>
+
+        <div id="steps-container"></div>
+
+        <button class="back" onclick="gotoPage(interface)"> back </button>
+    </div>
+
+
+
+    
+    <div id="track-edit-page">
+        <div id="track-functions"></div>
+        <button class="back" onclick="gotoPage(interface)"> back </button>
+        <div id="track-edit-text"></div>
+    </div>
+
+    <div id="pitch-page">
+        <div id="pitch-options">
+            <button class="back" onclick="gotoPage(trackEditPage)"> back </button>
+            <button id="12tone" class="back" onclick=""> 12-tone </button> 
+        </div>
+        <div id="pitch-slider-container"></div>
+    </div>
+
+    <div id="mod-page">
+        <div id="mod-options">
+            <button class="back" onclick="gotoPage(trackEditPage)"> back </button>
+        </div>
+        <div id="mod-slider-container"></div>
+    </div>
+    
+    <div id="wave-page">
+        <div id="wave-options">
+            <button class="back" onclick="gotoPage(trackEditPage)"> back </button>
+        </div>
+        <div id="wave-slider-container"></div>
+    </div>
+
+    <div id="functions-page">
+        <button class="back" onclick="gotoPage(interface)"> back </button> 
+        <button class="back" onclick="notes.reverse();"> reverse </button>
+        <button class="back" id="copy-to"> copy-to </button>
+        <button class="back" onclick="gotoPage(patternCreatorPage)"> pattern creator </button>
+        <br>
+        <div id="beatpad"></div>
+    </div>
+
+    <div id="pattern-creator-page">
+
+    </div>
+</body>
+<script src="domManipulation.js"></script>
+<script src="coreAudio.js"></script>
+<script>
+
+
+
+
+    const { System, Tracks } = CoreAudio;
+    const [
+        interface,
+        pitchPage,
+        modPage,
+        wavePage,
+        functionsPage,
+        patternCreatorPage,
+        masterPage,
+        trackEditPage
+    ] = PAGES =
+`interface
+pitch-page
+mod-page
+wave-page
+functions-page
+pattern-creator-page
+master-page
+track-edit-page`
+        .split`\n`.map(D)
+
+    const gotoPage = p => PAGES.forEach(page => 
+        page.style.display = page === p ? 'block' : 'none')
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+    // make everything
+    {
+        /*
+            make track buttons and their respective volume sliders,
+            on the main page
+        */
+        for (let i=0; i < Tracks.length; i++) {
+            const volume       = mkSlider()
+            const track_holder = E('div')
+            const btn          = E('button')
+            btn.innerHTML      = 'track '+i
+            btn.classList   .add('track-btn')
+            volume.classList.add('vol-slider')
+            track_holder        .appendChild(btn)
+            track_holder        .appendChild(volume)
+            Tracks[i].volume.gain.value = volume.value/500
+            D('track-container').appendChild(track_holder)
+            btn.onclick = _ => editTrack(i)
+            volume.oninput = function(){
+                Tracks[i].volume.gain.value = this.value/500
+            }
+        }
+        {
+            // wave selector page
+            'sine,square,sawtooth,triangle'.split`,`.forEach(s => {
+                const btn = E('input')
+                btn.type='radio'
+                btn.innerHTML = s
+                btn.onclick = _ => 
+                    Tracks[System.currentTrack].forEach(track =>
+                        track.notes.forEach(note => note.type = s))
+                D('wave-slider-container').appendChild(btn)
+
+            // <input type="radio" oninput="Tracks[System.currentTrack]"> sine
+            // <input type="radio"> square
+            // <input type="radio"> sawtooth
+            // <input type="radio"> triangle
+            })
+        }
+        
+        // create step buttons
+        System.steps.forEach((step,i) => {
+            const stepBtn = E('button')
+            stepBtn.classList.add('step-btn')
+            stepBtn.classList.add('enabled')
+            stepBtn.innerHTML = i+1
+            stepBtn.id = 'step-'+i
+            stepBtn.onclick = _ => { 
+                if (D('active-step-btn').classList.contains('enabled')) {
+                    stepBtn.classList.toggle('enabled')
+                    step.active ^= 1
+                } else {
+                    stepBtn.classList.toggle('disabled')
+                    step.muted ^= 1
+                }
+            }
+            step.btn = stepBtn // for class toggling purpose
+            D('steps-container').appendChild(stepBtn)
+            
+            {
+                // add pitch sliders to pitch page
+                const p = mkSlider()
+                const box = E('div')
+                const text = E('div')
+                text.innerHTML = '&nbsp;'
+                text.id = 'ps-text-'+i
+                p.classList.add('pitch-slider')
+                box.classList.add('slider-box')
+                box.appendChild(text)
+                box.appendChild(p)
+                D('pitch-slider-container').appendChild(box)
+                p.id = 'p-'+i
+                p.min ='5' // 32Hz should be low enough for most
+                p.max ='12.3'
+                p.step = '0.0001'
+                // p.dataset.texts = []
+                // p.dataset.values = []
+                // p.oninput=p.onpointerup=p.ontouchend=_=> {
+                //     const x = 
+                //         Tracks[System.currentTrack].notes[i].frequency.value =
+                //         (2 ** p.value) | 0
+                //     Tracks[System.currentTrack].notes[i].text = text.innerHTML = x + 'hz<br>'
+                // }
+            }
+            {
+                // // mod page
+                // const p = mkSlider();
+                // p.classList.add('mod-slider')
+                // const q = mkSlider();
+                // q.classList.add('mod-speed-slider')
+                // const box = E('div')
+                // box.classList.add('slider-box')
+                // const text = E('div')
+                // text.innerHTML='&nbsp;'
+                // box.appendChild(text)
+                // box.appendChild(p)
+                // box.appendChild(q)
+                // D('mod-slider-container').appendChild(box)
+
+                // p.id = 'm-'+i
+                // p.value=p.min = 0
+                // p.max ='100'
+                // p.step='0.01'
+
+                // q.id = 'ms-'+i
+                // q.value=q.min = '-2'
+                // q.max ='6'
+                // q.step='0.0001'
+                // const data = [0,0];
+                // p.oninput=p.onpointerup=p.ontouchend=_=>{
+                //     step.dataset.modA = p.value * 100 | 0
+                //     data[0] = p.value | 0
+                //     text.innerHTML = data.join` : `
+                // }
+                // q.oninput=q.onpointerup=q.ontouchend=_=>{
+                //     step.dataset.modP = (2 ** q.value) * 100 | 0
+                //     data[1] = (2 ** q.value).toFixed(2)
+                //     text.innerHTML = data.join`:`
+                // }
+            }
+            {
+                
+                // // wave page
+                // const p = mkSlider();
+                // p.classList.add('mod-slider')
+                // const box = E('div')
+                // box.classList.add('slider-box')
+                // const text = E('div')
+                // text.innerHTML='&nbsp;'
+                // box.appendChild(text)
+                // box.appendChild(p)
+                // D('wave-slider-container').appendChild(box)
+
+                // p.id = 'm-'+i
+                // p.value=p.min =0
+                // p.max ='9'
+                // p.step='1'
+                
+                // p.oninput=p.onpointerup=p.ontouchend=_=>{
+                //     step.dataset.wave = p.value
+                //     text.innerHTML = 
+                //         'sin,tri,sq,saw,r-saw,x,y,a,b,c'.split`,`[p.value]
+                // }
+            }
+        })
+    }
+
+
+
+
+
+
+    
+    /*
+        mod: 
+            mod amount
+            mod period
+        wave:
+            track osc wave
+            modulation wave
+        function:
+            reverse
+            shift
+            set-all
+    */
+    const _mkBtn = (x,i) => {
+        const btn = E('button')
+        btn.classList.add('function-btn')
+        btn.id = x + '-btn'
+        btn.innerHTML = x
+        btn.onclick = _ =>
+            editTrack[x]()
+        return btn
+    }
+    const trackFunctions = 'pitch,mod,wave,adsr,function'.split`,`.map(_mkBtn).map(x=>
+        (D('track-functions').appendChild(x),x))
+    
+    function editTrack(i) {
+        gotoPage(trackEditPage)
+        D('track-edit-text').innerHTML = 'track '+i
+        System.currentTrack = i
+        
+    }
+        editTrack.pitch = _ => {
+            gotoPage(pitchPage)
+            // set the pitch sliders to work with track i
+            const pitchSliders = System.steps.map((_,i) => D('p-'+i))
+            pitchSliders.forEach((p,j) => {
+                p.value = 0
+                const text = D('ps-text-'+j)
+                text.innerHTML = Tracks[System.currentTrack].notes[j].text || '&nbsp;'
+                defaultPitchFunc()
+            })
+        }
+        editTrack.wave = i => gotoPage(wavePage)
+        editTrack.mod  = i => gotoPage(modPage)
+
+
+    const funcs = 
+        'active-step,pitch,mod,wave,function,master'
+        .split`,`
+
+    
+    
+
+
+   
+
+    const mkBtn = (i,x) => {
+        const btn = E('button')
+        btn.classList.add(x?'back':'function-btn')
+        btn.id = funcs[i] + '-btn'
+        btn.innerHTML = funcs[i]
+        btn.onclick = _ =>
+            i === 0 ? toggleActiveStep :
+            i === 1 ? gotoPage(pitchPage) :
+            i === 2 ? 0://gotoPage(modPage) : 
+            i === 3 ? 0://gotoPage(wavePage) :
+                      0// gotoPage(functionsPage)
+        return btn
+    }
+
+    ;['pitch-options','mod-options','wave-options'].forEach((p,j)=>{
+        for(let i=1;i<=3;i++)
+            if (i-1!==j)
+                D(p).appendChild(mkBtn(i,true))
+    })
+
+    // ############## INITIALIZE #######################
+    
+        const btns = Array(5).fill().map((_,i) => {
+            const btn = mkBtn(i);
+            // interface.appendChild(btn);
+        })
+    // ############################################################
+    const middleC = 261.625565
+    const numKeys = 88
+    const TR2 = 2 ** (1/12.0)
+    const pitches = Array(numKeys+1).fill().map((_,i) => 
+        middleC * TR2**(i-36)).map(x=>Math.round(x))
+    function noteName(i) {
+        return 'A,A#/Bb,B,C,C#/Db,D,D#/Eb,E,F,F#/Gb,G,G#/Ab'.split`,`[(i+3)%12] +
+        ((i+3)/12-2|0)
+    }
+
+    D('12tone').onclick = function() {
+        if (D('12tone').classList.toggle('enabled')){
+            for (let i = 0; i < 8; i++) {
+                const p = D('p-'+i), pText = D('ps-text-'+i)
+                const f = Tracks[System.currentTrack].notes[i].frequency
+                p.min = 0
+                p.max = numKeys
+                p.step = 1
+                p.value = pitches.findIndex(x => x > f.value)
+                p.oninput=p.onpointerup=p.ontouchend=_=>{
+                    const j = p.value
+                    f.value = pitches[j]
+                    Tracks[System.currentTrack].notes[i].text = pText.innerHTML = noteName(+j)
+                }
+            }
+        } else {
+            defaultPitchFunc()
+        }
+    }
+    function defaultPitchFunc() {
+        for (let i = 0; i < 8; i++) {
+            const p = D('p-'+i), pText = D('ps-text-'+i)
+            p.min ='5' // 32Hz should be low enough for most
+            p.max ='12.3'
+            p.step='0.0001'
+            p.value = Math.log2(pitches[p.value])
+            p.oninput=p.onpointerup=p.ontouchend=_=> {
+                const x = 
+                    Tracks[System.currentTrack].notes[i].frequency.value =
+                    (2 ** p.value) | 0
+                    Tracks[System.currentTrack].notes[i].text = pText.innerHTML = x + 'hz<br>'
+            }
+        }
+    }
+
+
+    startScreenSetup({
+        func: _ => Tracks.forEach(t=>t.notes.forEach(s => s.start())),
+        text: "8 beat thingy"
+    })
+
+
+
+</script>
+</html>

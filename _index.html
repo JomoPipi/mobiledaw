@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+    <head>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    font: 1.2em Arial;
+                }
+                body {
+                    background-color:powderblue;
+                }
+                .btn {
+                    width: 50px;
+                }
+                .section {
+                    border: 1px solid red;
+                    display: inline-block;
+                }
+                #volume {
+                    width: 30vw;
+                }
+                .note-track {
+                    background-color: grey;
+                    width: 100%;
+                    height: 21vh;
+                    text-align: center;
+                }
+                .note {
+                    height: 19vh;
+                    width: 19vh;
+                    background-color: aquamarine;
+                    border-radius: 15px;
+                    display: inline-block;
+                    margin-left: 1%;
+                    margin-top: 0.5%;
+                    border: 1px solid white;
+                }
+            </style>
+            <script src="https://files-bfyeorwdgp.now.sh"></script>
+    </head>
+    <body style="vertical-align: middle;">
+        <div id="main-page">
+
+            <div class="section">
+                steps
+                <button class="btn">-</button>
+                <button class="btn">+</button>
+            </div>
+            <div class="section">
+                track
+                <button class="btn">-</button>
+                <button class="btn">+</button>
+            </div>
+            <div class="section">
+                volume
+                <input type="range" id="volume">
+            </div>
+
+            <div id="tracks">
+                <div id="nt0" class="note-track">
+                </div>
+                <div id="nt1" class="note-track">
+                </div>
+                <div id="nt2" class="note-track">
+                </div>
+            </div>
+            
+        </div>
+    </body>
+    <script>
+        const D = x => document.getElementById(x)
+        const E = x => document.createElement(x)
+        const blackKeyMap = [[91,152],[210,269],[445,506],[563,623],[684,743]].map(x => x.map(y => y / 831.0))
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext);
+        const sines = [...Array(12)].map((tone,i) => {
+            tone = audioCtx.createOscillator()
+            tone.frequency.value = 440 * (2 ** (1/12.0)) ** i // multiply by the 12th root of 2 to get the next key
+            tone.type = 'triangle'
+            tone.isConnected = false
+            return tone
+        })
+        document.body.onmouseup = document.body.ontouchend = function(e) {
+            sines.forEach(s => s.isConnected ? (s.disconnect(audioCtx.destination),s.isConnected=0) : 0)
+        }
+        for(let j = 0; j < 3; j++)
+            for (let i = 0; i < 8; i++)
+                aNewNote(j,i)
+        function aNewNote(track,column) {
+            const note = E('div')
+            note.classList.add('note')
+            D('nt'+track).appendChild(note)
+            note.ontouchstart = note.onmousedown = function(e) {
+                sines[column].connect(audioCtx.destination)
+                sines[column].isConnected=1
+            }
+            return note
+        }
+        function delay(ms) {
+            const start = Date.now()
+            while (Date.now() - start < ms);
+        }
+        startScreenSetup({
+            func: _ => sines.forEach(s => s.start()),
+            text: "Piano!"
+        })
+    </script>
+</html>
